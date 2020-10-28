@@ -1,0 +1,27 @@
+Símbolo         Valor Decimal   Valor Hexadecimal
+-------         -------------   -----------------
+_APP                      256                 100
+_KRN_INT                32768                8000
+_IOAREA16               65408                FF80
+_IOAREA08               65472                FFC0
+_STACK                  65000                FDE8
+IVET                    65470                FFBE
+TIMDT                   65495                FFD7
+INTS                    65496                FFD8
+INTE                    65497                FFD9
+TECST                   65498                FFDA
+TECDT                   65499                FFDB
+VISOR                   65500                FFDC
+CR                         13                   D
+BS                          8                   8
+_RESET                  32786                8012
+CLEARDISPLAY               34                  22
+CD_LOOP                    38                  26
+_KBHIT                     56                  38
+_SHIFT                     57                  39
+_CTRL                      58                  3A
+_GETCHAR                   59                  3B
+_PUTCHAR                   60                  3C
+_PUTMSG                    61                  3D
+_START                     62                  3E
+_READY                     63                  3F

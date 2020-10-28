@@ -125,6 +125,18 @@ _kbhit:
 ;	�     Outro valor: liga o estado SHIFT
 ;------------------------------------------------------------------------------
 _shift:
+		AND		#00,INTE
+		TST		R0
+		BNE		_shiftOff
+		OR 		#h00, keyStat
+		JMP		_shiftend
+
+_shiftOff:
+		AND		#h00, keyStat
+
+_shiftend:
+		MOV		keyStat,R0
+		MOV		#h83,INTE
 		rts		r7
 
 
@@ -138,6 +150,18 @@ _shift:
 ;	�     Outro valor: liga o estado CTRL
 ;------------------------------------------------------------------------------
 _ctrl:
+		AND		#00,INTE
+		TST		R0
+		BNE		_ctrlOff
+		OR 		#h00, keyStat
+		JMP		_ctrlEnd
+
+_ctrlOff:
+		AND		#h00, keyStat
+
+_ctrlEnd:
+		MOV		keyStat,R0
+		MOV		#h83,INTE
 		rts		r7
 
 

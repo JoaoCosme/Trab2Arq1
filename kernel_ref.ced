@@ -113,6 +113,14 @@ CD_Loop:
 ;	Essa fun��o n�o � bloqueante. Ou seja, deve retornar imediatamente para o chamador, com a informa��o do teclado.
 ;------------------------------------------------------------------------------
 _kbhit:
+		AND		#00,INTE
+		mov		TECST,r0
+		cmp		r0,#H80
+		bne		_kbhitEnd
+		OR		#80,keyStat
+
+_kbhitEnd:
+		mov		keyStat,R0
 		rts		r7
 
 
@@ -178,6 +186,50 @@ _ctrlEnd:
 ;	�	Se CTRL desligado e SHIFT ligado, converte letras para as correspondentes letras mai�sculas (valores ASCII entre H41 e H5A)
 ;------------------------------------------------------------------------------
 _getchar:
+		AND		#00,INTE
+		JSR		r7, _kbhit
+		CMP		#h80, R0 ;;Verificar se tem tecla
+		BEQ		_getchar
+		MOV		TECDT, R1
+		CMP		#h81, R0 ;;Verificar se tem CTRL
+		BEQ		_getcharCtrlMenor
+		CMP		#h82, R0 ;;Verificar se tem SHIFT
+		BEQ		_getcharshiftMenor
+		;; Se não pulou até aqui, tem tecla mas não tem CTL nem SHIFT
+_getcharSemStatusMenor:
+		CMP		R1,#h61
+		BGT		_getcharSemStatusMaior
+		ADD		#26, R1
+		JMP		_getcharSemStatusMenor
+_getcharSemStatusMaior
+		CMP		R1,#H7A
+		BLT		_getcharEnd
+		SUB		#26, R1
+		JMP 		_getcharSemStatusMaior
+		;; Tratamento de CTRL
+_getcharCtrlMenor:
+		CMP		R1,#h00
+		BGT		_getcharCtrlMaior:
+		ADD		#26, R1
+		JMP		_getcharCtrlMenor
+_getcharCtrlMaior:
+		CMP		R1,#H1A
+		BLT		_getcharEnd
+		SUB		#26, R1
+		JMP 		_getcharCtrlMaior:
+		;; Tratamento de SHIFT
+_getcharshiftMenor:
+		CMP		R1,#H41
+		BGT		_getcharshiftMaior:
+		ADD		#26, R1
+		JMP		_getcharshiftMenor
+_getcharshiftMaior:
+		CMP		R1,#H5A
+		BLT		_getcharEnd
+		SUB		#26, R1
+		JMP 		_getcharshiftMaior:
+_getcharEnd:
+		MOV		#h83,INTE
 		rts		r7
 
 

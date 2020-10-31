@@ -68,7 +68,7 @@ BS:			equ	H08
 		dw		_putmsg
 		dw		_start
 		dw		_ready
-
+		dw		keyStat
 
 
 ;------------------------------------------------------------------------------
@@ -87,6 +87,7 @@ _reset:
 		org 0;
 		MOV		'O',VISOR
 		MOV		'L',VISOR-1
+		MOV		0, keyStat
 		AND		#00,INTE
 		MOV		#_STACK,R6
 		;MOV		ALGO, IVET
@@ -113,14 +114,19 @@ CD_Loop:
 ;	Essa fun��o n�o � bloqueante. Ou seja, deve retornar imediatamente para o chamador, com a informa��o do teclado.
 ;------------------------------------------------------------------------------
 _kbhit:
-		AND		#00,INTE
 		mov		TECST,r0
-		cmp		r0,#H80
-		bne		_kbhitEnd
-		OR		#80,keyStat
+		cmp		r0,#h80
+		bne		_kbhitNo
+		OR		#h01,keyStat
+		JMP		_kbhitEnd
 
+_kbhitNo:
+		AND		#hFE,keyStat
 _kbhitEnd:
 		mov		keyStat,R0
+		MOV		TECST,R3
+		CLR		TECST
+		MOV		TECST,R3
 		rts		r7
 
 
@@ -133,18 +139,16 @@ _kbhitEnd:
 ;	�     Outro valor: liga o estado SHIFT
 ;------------------------------------------------------------------------------
 _shift:
-		AND		#00,INTE
 		TST		R0
-		BNE		_shiftOff
-		OR 		#h00, keyStat
+		BEQ		_shiftOff
+		OR 		#h02, keyStat
 		JMP		_shiftend
 
 _shiftOff:
-		AND		#h00, keyStat
+		AND		#hFd, keyStat
 
 _shiftend:
 		MOV		keyStat,R0
-		MOV		#h83,INTE
 		rts		r7
 
 
@@ -158,10 +162,9 @@ _shiftend:
 ;	�     Outro valor: liga o estado CTRL
 ;------------------------------------------------------------------------------
 _ctrl:
-		AND		#00,INTE
 		TST		R0
-		BNE		_ctrlOff
-		OR 		#h00, keyStat
+		BEQ		_ctrlOff
+		OR 		#h04, keyStat
 		JMP		_ctrlEnd
 
 _ctrlOff:
@@ -169,7 +172,6 @@ _ctrlOff:
 
 _ctrlEnd:
 		MOV		keyStat,R0
-		MOV		#h83,INTE
 		rts		r7
 
 
@@ -185,52 +187,54 @@ _ctrlEnd:
 ;	�	Se CTRL ligado, converte letras em caracteres de controle correspondentes (valores ASCII entre H00 e H1A)
 ;	�	Se CTRL desligado e SHIFT ligado, converte letras para as correspondentes letras mai�sculas (valores ASCII entre H41 e H5A)
 ;------------------------------------------------------------------------------
+
+
 _getchar:
-		AND		#00,INTE
 		JSR		r7, _kbhit
-		CMP		#h80, R0 ;;Verificar se tem tecla
+		MOV		#h01,R4
+		AND		R0,R4
 		BEQ		_getchar
-		MOV		TECDT, R1
-		CMP		#h81, R0 ;;Verificar se tem CTRL
-		BEQ		_getcharCtrlMenor
-		CMP		#h82, R0 ;;Verificar se tem SHIFT
-		BEQ		_getcharshiftMenor
+		MOV		TECDT, R0
+		AND		 keyStat,#h04, ;;Verificar se tem CTRL
+		BNE		_getcharCtrlMenor
+		AND		 keyStat,#h02, ;;Verificar se tem SHIFT
+		BNE		_getcharshiftMenor
 		;; Se não pulou até aqui, tem tecla mas não tem CTL nem SHIFT
 _getcharSemStatusMenor:
-		CMP		R1,#h61
+		CMP		R0,#h61
 		BGT		_getcharSemStatusMaior
-		ADD		#26, R1
+		ADD		#h20, R0
 		JMP		_getcharSemStatusMenor
-_getcharSemStatusMaior
-		CMP		R1,#H7A
+_getcharSemStatusMaior:
+		CMP		R0,#H7A
 		BLT		_getcharEnd
-		SUB		#26, R1
+		SUB		#h20, R0
 		JMP 		_getcharSemStatusMaior
 		;; Tratamento de CTRL
 _getcharCtrlMenor:
-		CMP		R1,#h00
-		BGT		_getcharCtrlMaior:
-		ADD		#26, R1
+		CMP		R0,#h00
+		BGT		_getcharCtrlMaior
+		ADD		#26, R0
 		JMP		_getcharCtrlMenor
 _getcharCtrlMaior:
-		CMP		R1,#H1A
+		CMP		R0,#H1A
 		BLT		_getcharEnd
-		SUB		#26, R1
-		JMP 		_getcharCtrlMaior:
+		SUB		#26, R0
+		JMP 		_getcharCtrlMaior
 		;; Tratamento de SHIFT
 _getcharshiftMenor:
-		CMP		R1,#H41
-		BGT		_getcharshiftMaior:
-		ADD		#26, R1
+		CMP		R0,#H41
+		BGT		_getcharshiftMaior
+		ADD		#32, R0
 		JMP		_getcharshiftMenor
 _getcharshiftMaior:
-		CMP		R1,#H5A
+		CMP		R0,#H5A
 		BLT		_getcharEnd
-		SUB		#26, R1
-		JMP 		_getcharshiftMaior:
+		SUB		#32, R0
+		JMP 		_getcharshiftMaior
 _getcharEnd:
-		MOV		#h83,INTE
 		rts		r7
+
 
 
 ;------------------------------------------------------------------------------
@@ -245,6 +249,50 @@ _getcharEnd:
 ;	Caso ocorra erro ou se os valores fornecidos na entrada sejam inv�lidos, a fun��o deve ser ignorada e retornado valor diferente de 0 (zero) em R0.
 ;------------------------------------------------------------------------------
 _putchar:
+		CMP		R0,#h00
+		BLT		_putcharErrorChar
+		CMP		R0,#H7A
+		BGT		_putcharErrorChar
+
+		CMP		R1,#01
+		BGT		_putcharErrorVisor
+
+;;Validação de offset de visor
+
+		CMP			R1,#0
+		BNE			_putcharVisor1
+		MOV			#0,visorOffset
+		JMP			_putcharPrint
+
+_putcharVisor1:
+		MOV			#18,visorOffset
+
+_putcharPrint:
+		CMP		R2,#h00
+		BLT		_putcharErrorForaVisor
+		CMP		R2,#17
+		BGT		_putcharErrorForaVisor
+
+		CMP		R1,#01
+		BGT		_putcharErrorVisor
+
+		ADD		visorOffset,R2
+		MOV		R0,VISOR(R2)
+		MOV		#0,R0
+		JMP		_putcharEnd
+
+_putcharErrorChar:
+		mov 		#h405,R0
+		JMP 		_putcharEnd
+
+_putcharErrorVisor:
+		mov 		#h404,R0
+		JMP 		_putcharEnd
+_putcharErrorForaVisor:
+		mov		 #h400,R0
+		JMP		 _putcharEnd
+
+_putcharEnd:
 		rts		r7
 
 

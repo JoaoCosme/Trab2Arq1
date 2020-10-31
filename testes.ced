@@ -1,0 +1,88 @@
+_APP:		equ	h0100
+_KRN_INT:	equ	h8000
+_IOAREA16:	equ	hFF80
+_IOAREA08:	equ	hFFC0
+_STACK:		equ	hFDE8
+
+
+; Acesso em 16 bits
+	org	_IOAREA16
+	daw	[31]
+IVET:	dw	0			; Vetor de interrup??o
+
+; Acesso em 8 bits
+	org	_IOAREA08
+	dab	[23]
+TIMDT:	db	0			; Registro de programa??o do timer
+INTS:	db	0			; INTERRUPT STATUS: IP x x x . x x IPStec IPStim
+INTE:	db	0			; INTERRUPT ENABLE: IE x x x . x x IEStec IEStim
+TECST:	db	0			; Status do teclado
+TECDT:	db	0			; Dado do teclado
+VISOR:	dab	[36]		; Portas de acesso ao visor
+
+CR:			equ	H0D
+BS:			equ	H08
+
+		
+
+		org	h200
+keyStat: 	dw	0
+visorOffset:	dw	0
+
+_putchar:
+		CMP		R0,#h00
+		BGT		_putcharValidaR0
+		JMP		_putcharErrorChar
+_putcharValidaR0:
+		CMP		R0,#H7A
+		BLT		_putcharErrorChar
+
+		CMP		R1,#01
+		BGT		_putcharErrorVisor
+
+;;Validação de offset de visor
+
+		CMP			R1,#0
+		BNE			_putcharVisor1
+		MOV			#0,visorOffset
+		JMP			_putcharPrint
+
+_putcharVisor1:
+		MOV			#18,visorOffset
+
+_putcharPrint:
+		CMP		R2,#h00
+		BGT		_putcharValidaR2
+		JMP		_putcharErrorForaVisor
+_putcharValidaR2:
+		CMP		R2,#17
+		BLT		_putcharErrorForaVisor
+
+		ADD		visorOffset,R2
+		MOV		R0,R2(VISOR)
+
+_putcharErrorChar:
+		mov 		#h405,R0
+		JMP 		_putcharEnd
+
+_putcharErrorVisor:
+		mov 		#h404,R0
+		JMP 		_putcharEnd
+_putcharErrorForaVisor:
+		mov		 #h400,R0
+		JMP		 _putcharEnd
+
+_putcharEnd:
+		rts		r7
+
+org 0
+
+MOV		#_STACK, R6
+MOV		#0,keyStat
+MOV		#0,R0
+JSR		r7,_shift
+JSR		r7,_getchar
+MOV		keyStat,r0
+MOV		r1,hFFF4 
+HLT
+

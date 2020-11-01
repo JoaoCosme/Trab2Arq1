@@ -1,0 +1,344 @@
+
+
+;
+;
+;******************************************************************************
+;******************************************************************************
+;
+_BOOT:		equ		H0000
+_APP:		equ		h0100
+_SISTEMA:	equ		h0080
+_KRN_INT:	equ		h8000
+_IOAREA16:	equ		hFF80
+_IOAREA08:	equ		hFFC0
+
+;
+;------------------------------------------------------------------------------
+;	Área reservada para os periféricos
+;------------------------------------------------------------------------------
+
+; Acesso em 16 bits
+		org	_IOAREA16
+_STACK:
+		daw	[31]
+IVET:	dw	0			; Vetor de interrupção
+
+; Acesso em 8 bits
+		org	_IOAREA08
+		dab	[23]
+TIMDT:	db	0			; Registro de programação do timer
+INTS:	db	0			; INTERRUPT STATUS: IP x x x . x x IPStec IPStim
+INTE:	db	0			; INTERRUPT ENABLE: IE x x x . x x IEStec IEStim
+TECST:	db	0			; Status do teclado
+TECDT:	db	0			; Dado do teclado
+VISOR:	dab	[36]		; Portas de acesso ao visor
+
+CR:			equ	H0D
+BS:			equ	H08
+
+;
+reset:		equ		0
+kbhit:		equ		1
+shift:		equ		2
+ctrl:		equ		3
+getchar:	equ		4
+putchar:	equ		5
+putmsg:		equ		6
+start:		equ		7
+ready:		equ		8
+
+
+;
+;==============================================================================
+;	Boot Startup
+;==============================================================================
+		org		_BOOT
+		clr		INTE
+		clr		r6
+
+		clr		r5
+		jmp		(_KRN_INT(r5))			; goto _KRN_INT[0]
+	
+	
+;
+;==============================================================================
+;	Vetor das funções, para aplicação
+;	r5 -> indica a função
+;==============================================================================
+MAX_FUNCAO:	equ		9
+
+		org		_SISTEMA
+		
+		tst		r5
+		bne		go_syscall
+		rts		r7
+		
+go_syscall:
+		cmp		r5,#MAX_FUNCAO			; if (r5 > MAX_FUNCAO) return
+		ble		switch_syscall
+		rts		r7
+	
+switch_syscall:
+		add		r5,r5				
+		jmp		(_KRN_INT(r5))			; goto _KRN_INT[r5]
+	
+
+
+;-------------------------------------------------------------	
+;-------------------------------------------------------------	
+		org		_APP
+	
+
+;-------------------------------------------------------------	
+;	Teste do putchar
+;-------------------------------------------------------------
+		mov		#'I',r0
+		mov		#0,r1
+		mov		#0,r2		
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+
+		mov		#'N',r0
+		mov		#0,r1
+		mov		#1,r2		
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+
+		mov		#'F',r0
+		mov		#0,r1
+		mov		#2,r2		
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+
+		mov		#'1',r0
+		mov		#1,r1
+		mov		#0,r2		
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+
+		mov		#'0',r0
+		mov		#1,r1
+		mov		#1,r2		
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+
+		mov		#'8',r0
+		mov		#1,r1
+		mov		#2,r2		
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+
+		mov		#getchar,r5
+		jsr		r7,_SISTEMA
+		
+		jmp		tst_putmsg
+		
+;-------------------------------------------------------------	
+;	Teste do putmsg
+;-------------------------------------------------------------	
+msg_limpa:	dab	'                  ',0
+msg_vis0:	dab	'[putmsg -> 0     ]',0
+msg_vis1:	dab	'[putmsg -> 1     ]',0
+tst_putmsg:
+		mov		#msg_vis0,r0
+		jsr		r7,msg_visor0
+		
+		mov		#msg_vis1,r0
+		jsr		r7,msg_visor1
+			
+		mov		#getchar,r5
+		jsr		r7,_SISTEMA
+		
+		jmp		tst_timer
+
+;-------------------------------------------------------------	
+;	Teste de timer: 
+;-------------------------------------------------------------	
+msg_tim0:	dab	'timer (5seg)      ',0
+msg_tim1:	dab	'  seg...          ',0
+msg_tim2:	dab	'timer (fim)       ',0
+
+dsp_r1_on_visor_1:
+		mov		r1,-(r6)
+		mov		r1,r0
+		mov		#1,r1
+		mov		#0,r2		
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+		mov		(r6)+,r1
+		rts		r7
+		
+tst_timer:
+		mov		#msg_tim0,r0		; mensagem de inicializacao
+		jsr		r7,msg_visor0
+		mov		#msg_tim1,r0
+		jsr		r7,msg_visor1
+		
+		mov		#'0',r1				; loop de contagem de 5 segundos
+tst_timer_2:
+		jsr		r7,dsp_r1_on_visor_1
+		
+		mov		r1,-(r6)
+		mov		#1000,r0
+		mov		#start,r5
+		jsr		r7,_SISTEMA	
+tst_timer_1:
+		mov		#ready,r5
+		jsr		r7,_SISTEMA
+		tst		r0
+		beq		tst_timer_1
+		mov		(r6)+,r1
+		
+		inc		r1
+		cmp		r1,#'5'
+		ble		tst_timer_2
+		
+		mov		#msg_tim2,r0
+		jsr		r7,msg_visor0
+		
+		mov		#getchar,r5
+		jsr		r7,_SISTEMA
+		
+		jmp		tst_kbhit
+		
+		
+;-------------------------------------------------------------	
+;	Teste do kbhit/getchar/putchar
+;-------------------------------------------------------------	
+msg_kbh0:	dab	'kbhit             ',0
+dsp_TEC:	equ	6
+msg_kbh1:	dab	'SH: 0  CTR: 0     ',0
+dsp_SH:		equ	4
+dsp_CTR:	equ	12
+var_sh:		dw	0
+var_ctr:	dw	0
+
+dsp_r0_on_visor_1_SH:
+		mov		#1,r1
+		mov		#dsp_SH,r2		
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+		rts		r7
+dsp_r0_on_visor_1_CTR:
+		mov		#1,r1
+		mov		#dsp_CTR,r2		
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+		rts		r7
+dsp_r0_on_visor_0_TEC:
+		mov		r0,-(r6)
+		asr		r0
+		asr		r0
+		asr		r0
+		asr		r0
+		jsr		r7,hex_to_ascii
+		mov		#0,r1
+		mov		#dsp_TEC,r2		
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+		mov		(r6),r0
+		jsr		r7,hex_to_ascii
+		mov		#0,r1
+		mov		#dsp_TEC,r2	
+		inc		r2
+		mov		#putchar,r5
+		jsr		r7,_SISTEMA
+		mov		(r6)+,r0
+		rts		r7
+hex_to_ascii:
+		and		#H000F,r0
+		cmp		r0,#10
+		blt		h_2_a
+		add		#7,r0
+h_2_a:
+		add		#'0',r0
+		rts		r7
+
+tst_kbhit_SH:
+		mov		r0,-(r6)
+		asr		r0
+		and		#1,r0
+		add		#'0',r0
+		jsr		r7,dsp_r0_on_visor_1_SH
+		mov		(r6)+,r0
+		rts		r7
+tst_kbhit_CTR:
+		mov		r0,-(r6)
+		asr		r0
+		asr		r0
+		and		#1,r0
+		add		#'0',r0
+		jsr		r7,dsp_r0_on_visor_1_CTR
+		mov		(r6)+,r0
+		rts		r7
+
+		
+;---
+tst_kbhit:
+		mov		#msg_kbh0,r0
+		jsr		r7,msg_visor0
+		mov		#msg_kbh1,r0
+		jsr		r7,msg_visor1
+
+tst_kbhit_1:
+		mov		#kbhit,r5
+		jsr		r7,_SISTEMA
+		
+		jsr		r7,tst_kbhit_SH
+		jsr		r7,tst_kbhit_CTR
+		
+		and		#1,r0
+		beq		tst_kbhit_1
+		
+		mov		#getchar,r5
+		jsr		r7,_SISTEMA
+		
+		cmp		r0,#'1'
+		beq		tst_set_shift
+		
+		cmp		r0,#'2'
+		beq		tst_set_ctrl
+		
+		cmp		r0,#CR
+		beq		tst_kbhit_fim
+		
+		jsr		r7,dsp_r0_on_visor_0_TEC
+		
+		br		tst_kbhit_1
+
+tst_set_shift:	
+		not		var_sh
+		and		#1,var_sh
+		mov		var_sh,r0
+		mov		#shift,r5
+		jsr		r7,_SISTEMA
+		br		tst_kbhit_1
+tst_set_ctrl:	
+		not		var_ctr
+		and		#1,var_ctr
+		mov		var_ctr,r0
+		mov		#ctrl,r5
+		jsr		r7,_SISTEMA
+		br		tst_kbhit_1
+
+tst_kbhit_fim:		
+		hlt
+		
+
+;-------------------------------------------------------------
+;R0 -> string
+;-------------------------------------------------------------	
+msg_visor0:
+		mov		#0,r1
+		br		msg_visor
+msg_visor1:
+		mov		#1,r1
+msg_visor:
+		clr		r2
+		mov		#putmsg,r5
+		jsr		r7,_SISTEMA			
+		rts		r7
+
+
+
+

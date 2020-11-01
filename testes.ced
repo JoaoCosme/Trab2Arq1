@@ -26,63 +26,61 @@ BS:			equ	H08
 		
 
 		org	h200
-keyStat: 	dw	0
-visorOffset:	dw	0
 
-_putchar:
-		CMP		R0,#h00
-		BGT		_putcharValidaR0
-		JMP		_putcharErrorChar
-_putcharValidaR0:
-		CMP		R0,#H7A
-		BLT		_putcharErrorChar
+contador:	dw		0
+contadorMeta:	dw		0
 
-		CMP		R1,#01
-		BGT		_putcharErrorVisor
 
-;;Validação de offset de visor
+_start:
 
-		CMP			R1,#0
-		BNE			_putcharVisor1
-		MOV			#0,visorOffset
-		JMP			_putcharPrint
-
-_putcharVisor1:
-		MOV			#18,visorOffset
-
-_putcharPrint:
-		CMP		R2,#h00
-		BGT		_putcharValidaR2
-		JMP		_putcharErrorForaVisor
-_putcharValidaR2:
-		CMP		R2,#17
-		BLT		_putcharErrorForaVisor
-
-		ADD		visorOffset,R2
-		MOV		R0,R2(VISOR)
-
-_putcharErrorChar:
-		mov 		#h405,R0
-		JMP 		_putcharEnd
-
-_putcharErrorVisor:
-		mov 		#h404,R0
-		JMP 		_putcharEnd
-_putcharErrorForaVisor:
-		mov		 #h400,R0
-		JMP		 _putcharEnd
-
-_putcharEnd:
+		MOV		#10,TIMDT
+		MOV		#0,contador
+		MOV		R0,contadorMeta
+		AND		#hFE,INTS
 		rts		r7
 
-org 0
 
+
+_ready:
+		CMP		contador,contadorMeta
+		BLT		_notready
+		MOV		#1,R0
+		JMP		_readyend
+
+_notready:
+		MOV		#0,R0
+_readyend:
+		rts		r7
+
+
+_tratador:
+		MOV		INTS,R5
+		AND		#h81,R5
+		BEQ		_tratadorFim
+		INC		contador
+		MOV		#h00,INTS
+_tratadorFim:
+		RTI
+
+
+
+org 0
+MOV		#_tratador, IVET
+MOV		#h81,INTE
+MOV		#0,contadorMeta
+MOV		#0,contador
 MOV		#_STACK, R6
-MOV		#0,keyStat
-MOV		#0,R0
-JSR		r7,_shift
-JSR		r7,_getchar
-MOV		keyStat,r0
-MOV		r1,hFFF4 
+MOV		#300,R0
+JSR		r7,_start
+
+loop:
+JSR		r7,_ready
+CMP		#0,R0
+Beq		loop		
+
+MOV		contador,R3
+MOV		contadorMeta,R4
+
+
 HLT
 

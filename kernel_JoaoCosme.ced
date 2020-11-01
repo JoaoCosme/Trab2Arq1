@@ -60,30 +60,23 @@ BS:			equ	H08
 ;------------------------------------------------------------------------------
 		org		_KRN_INT
 
-		dw		_reset
-		dw		_kbhit
-		dw		_shift
-		dw		_ctrl
-		dw		_getchar
-		dw		_putchar
-		dw		_putmsg
-		dw		_start
-		dw		_ready
+		dw		reset
+		dw		kbhit
+		dw		shift
+		dw		ctrl
+		dw		getchar
+		dw		putchar
+		dw		putmsg
+		dw		start
+		dw		ready
 		dw		keyStat
 
 
-;;Variavies de programa
-
-keyStat:	dw		0
-visorOffset:	dw		0
-msg:		dab	 'TesteTesteTeste',0
-contador:	dw		0
-contadorMeta:	dw		0
 
 ;------------------------------------------------------------------------------
 ;	C�digo de RESET (BOOT) do processador/interrup��o
 ;------------------------------------------------------------------------------
-_reset:
+reset:
 ; 1) Desabilitar o sistema de interrup��es
 ; 2) Inicializar o stack pointer (SP = R6)
 ; 3) Inicializar as vari�veis internas usadas pelo sistema de interrup��es (IVET, INTE, etc.)
@@ -93,25 +86,24 @@ _reset:
 ; 7) Limpar o visor
 ; 8) Habilitar interrup��es
 ; 9) Retornar para o programa de aplica��o com um desvio para o endere�o H0100 da mem�ria
-		org 0;
+		MOV		#0,INTE
 		MOV		#0,visorOffset
 		MOV		#0,contador
 		MOV		#0, keyStat
 		MOV		#0,contadorMeta
 		MOV		#_STACK,R6
 		MOV		#_tratador, IVET
-		MOV		#h81,INTE
 		MOV		#h00,TECST
 		MOV 		#h10,TIMDT
 ClearDisplay:
 		mov		#VISOR,r0
 CD_Loop:
-		mov		#'A',(r0)
+		mov		#' ',(r0)
 		inc		r0
+		CMP		r0,#0
 		bne		CD_Loop
-		MOV		#h83,INTE
-		jmp		_APP
-
+		MOV		h82,INTE
+		JMP		h0100
 
 ;------------------------------------------------------------------------------
 ;	BOOL kbhit(VOID)
@@ -123,7 +115,7 @@ CD_Loop:
 ;	�	Os outros bits devem retornar, sempre, em zero.a
 ;	Essa fun��o n�o � bloqueante. Ou seja, deve retornar imediatamente para o chamador, com a informa��o do teclado.
 ;------------------------------------------------------------------------------
-_kbhit:
+kbhit:
 		mov		TECST,r0
 		cmp		r0,#h80
 		bne		_kbhitNo
@@ -134,9 +126,7 @@ _kbhitNo:
 		AND		#hFE,keyStat
 _kbhitEnd:
 		mov		keyStat,R0
-		MOV		TECST,R3
 		CLR		TECST
-		MOV		TECST,R3
 		rts		r7
 
 
@@ -148,14 +138,15 @@ _kbhitEnd:
 ;	�     Zero: desliga o estado SHIFT
 ;	�     Outro valor: liga o estado SHIFT
 ;------------------------------------------------------------------------------
-_shift:
+shift:
+
 		TST		R0
 		BEQ		_shiftOff
 		OR 		#h02, keyStat
 		JMP		_shiftend
 
 _shiftOff:
-		AND		#hFd, keyStat
+		AND		#hFD, keyStat
 
 _shiftend:
 		MOV		keyStat,R0
@@ -171,14 +162,15 @@ _shiftend:
 ;	�     Zero: desliga o estado CTRL
 ;	�     Outro valor: liga o estado CTRL
 ;------------------------------------------------------------------------------
-_ctrl:
+ctrl:
+
 		TST		R0
 		BEQ		_ctrlOff
 		OR 		#h04, keyStat
 		JMP		_ctrlEnd
 
 _ctrlOff:
-		AND		#h00, keyStat
+		AND		#hFB, keyStat
 
 _ctrlEnd:
 		MOV		keyStat,R0
@@ -199,16 +191,28 @@ _ctrlEnd:
 ;------------------------------------------------------------------------------
 
 
-_getchar:
-		JSR		r7, _kbhit
-		MOV		#h01,R4
-		AND		R0,R4
-		BEQ		_getchar
+
+getchar:
+		JSR		r7, kbhit
+		MOV		keyStat,r2
+		MOV		#h01,R1
+		AND		R0,R1
+		BEQ		getchar
 		MOV		TECDT, R0
-		AND		 keyStat,#h04, ;;Verificar se tem CTRL
+
+		CMP		R0,#h2F
+		BLT		_getcharcontinue
+		CMP		R0,#h39
+		BLT		_getcharend
+_getcharcontinue:
+		MOV		#h04,r1
+		AND		 R2,r1, ;Verificar se tem CTRL
 		BNE		_getcharCtrlMenor
-		AND		 keyStat,#h02, ;;Verificar se tem SHIFT
+
+		MOV		#h02,r1
+		AND		 R2,r1, ;;Verificar se tem SHIFT
 		BNE		_getcharshiftMenor
+		MOV		#02,R3
 		;; Se não pulou até aqui, tem tecla mas não tem CTL nem SHIFT
 _getcharSemStatusMenor:
 		CMP		R0,#h61
@@ -220,29 +224,31 @@ _getcharSemStatusMaior:
 		BLT		_getcharEnd
 		SUB		#h20, R0
 		JMP 		_getcharSemStatusMaior
+
 		;; Tratamento de CTRL
 _getcharCtrlMenor:
 		CMP		R0,#h00
 		BGT		_getcharCtrlMaior
-		ADD		#26, R0
+		ADD		#H20, R0
 		JMP		_getcharCtrlMenor
 _getcharCtrlMaior:
 		CMP		R0,#H1A
 		BLT		_getcharEnd
-		SUB		#26, R0
+		SUB		#h20, R0
 		JMP 		_getcharCtrlMaior
 		;; Tratamento de SHIFT
 _getcharshiftMenor:
 		CMP		R0,#H41
 		BGT		_getcharshiftMaior
-		ADD		#32, R0
+		ADD		#h20, R0
 		JMP		_getcharshiftMenor
 _getcharshiftMaior:
 		CMP		R0,#H5A
 		BLT		_getcharEnd
-		SUB		#32, R0
+		SUB		#h20, R0
 		JMP 		_getcharshiftMaior
 _getcharEnd:
+		AND		#hFE,keystat
 		rts		r7
 
 
@@ -258,7 +264,7 @@ _getcharEnd:
 ;	Se a fun��o for executada corretamente, retornar 0 (zero) em R0.
 ;	Caso ocorra erro ou se os valores fornecidos na entrada sejam inv�lidos, a fun��o deve ser ignorada e retornado valor diferente de 0 (zero) em R0.
 ;------------------------------------------------------------------------------
-_putchar:
+putchar:
 		CMP		R0,#h00
 		BLT		_putcharErrorChar
 		CMP		R0,#H7A
@@ -288,6 +294,10 @@ _putcharPrint:
 
 		ADD		visorOffset,R2
 		MOV		R0,VISOR(R2)
+		CMP		R1,#0
+		BEQ		_putcharSemCorre
+		SUB		#18,r2
+_putcharSemCorre:
 		MOV		#0,R0
 		JMP		_putcharEnd
 
@@ -318,18 +328,23 @@ _putcharEnd:
 ;	Caso ocorra erro ou se os valores fornecidos na entrada sejam inv�lidos, a fun��o deve ser ignorada e retornado valor diferente de 0 (zero) em R0.
 ;	Caso o string seja maior do que o tamanho do visor (18 caracteres), o string deve ser truncado.
 ;------------------------------------------------------------------------------
-_putmsg:
-		MOV		(R0),R3
+putmsg:
+		MOV		R0,R3
+		DEC		R3
 _putmsgLoop:
 		CMP		(R3), #hFF
 		BEQ		_putmsgStringFim
 		MOV		(R3),R0
-		JSR		r7, _putchar
+		AND		#hff,R0
+		JSR		r7, putchar
 		CMP		R0,#0
-		BNE		_putmsgFim
+		BNE		_putmsgTratamento
 		INC		R3
 		INC		R2
 		JMP		_putmsgLoop
+_putmsgTratamento:
+		CMP		#h400,R0
+		BNE		_putmsgFim
 _putmsgStringFim:
 		mov		#0,R0
 _putmsgFim:
@@ -347,9 +362,10 @@ _putmsgFim:
 ;Entra:
 ;	R0 = valor do tempo, em milisegundos
 ;------------------------------------------------------------------------------
-_start:
+start:
 
-		MOV		#10,TIMDT
+		MOV		#1,TIMDT
+		OR		#h81,INTE
 		MOV		#0,contador
 		MOV		R0,contadorMeta
 		AND		#hFE,INTS
@@ -365,7 +381,7 @@ _start:
 ;	R0==0, se o tempo programado n�o se esgotou.
 ;	R0<>0, se o tempo programado estogou-se
 ;------------------------------------------------------------------------------
-_ready:
+ready:
 		CMP		contador,contadorMeta
 		BLT		_notready
 		MOV		#1,R0
@@ -378,13 +394,20 @@ _readyend:
 
 
 _tratador:
-		MOV		INTS,R5
-		AND		#h81,R5
+		MOV		INTS,R4
+		AND		#h81,R4
 		BEQ		_tratadorFim
 		INC		contador
 		MOV		#h00,INTS
 _tratadorFim:
 		RTI
 
+
+;;Variavies de programa
+
+keyStat:	dw		0
+visorOffset:	dw		0
+contador:	dw		0
+contadorMeta:	dw		0
 
 

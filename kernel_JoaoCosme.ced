@@ -1,6 +1,18 @@
+
+;*****************************************************************************
 ;
+;	Trabalho realizado por João Pedro Cosme
 ;
-;******************************************************************************
+;	INF01108 - Arquitetura e Organização de Computadores I - 2020/1 - Turma A 
+;
+;	Numero do Cartão: 00314792
+;
+;	Novembro de 2020
+;					
+;	Repositorio Github: https://github.com/JoaoCosme/Trab2Arq1
+;
+;****************************************************************************
+;****************************************************************************
 ;
 ;	Arquivo de Refer�ncia para iniciar o desenvolvimento do kernel
 ;
@@ -86,15 +98,19 @@ reset:
 ; 7) Limpar o visor
 ; 8) Habilitar interrup��es
 ; 9) Retornar para o programa de aplica��o com um desvio para o endere�o H0100 da mem�ria
-		MOV		#0,INTE
-		MOV		#0,visorOffset
-		MOV		#0,contador
+
+		MOV		#0,INTE 	;;Interrompe as interrupções para inicialização
+		;;Inicialização de Variaveis de Programa
+		MOV		#0, visorOffset
+		MOV		#0, contador
 		MOV		#0, keyStat
-		MOV		#0,contadorMeta
-		MOV		#_STACK,R6
+		MOV		#0, contadorMeta
+		;;Inicialização de variaveis especificas do CESAR
+		MOV		#_STACK, R6
 		MOV		#_tratador, IVET
-		MOV		#h00,TECST
-		MOV 		#h10,TIMDT
+		MOV		#h00, TECST
+		MOV 		#h10, TIMDT
+		;;Limpando Visor
 ClearDisplay:
 		mov		#VISOR,r0
 CD_Loop:
@@ -116,14 +132,16 @@ CD_Loop:
 ;	Essa fun��o n�o � bloqueante. Ou seja, deve retornar imediatamente para o chamador, com a informa��o do teclado.
 ;------------------------------------------------------------------------------
 kbhit:
+;; Verifica se alguma tecla foi pressionada e atualiza o bit0 de keyStat de acordo.
+
 		mov		TECST,r0
 		cmp		r0,#h80
 		bne		_kbhitNo
-		OR		#h01,keyStat
+		OR		#h01,keyStat ;;Altera apenas o bit 0 de keyStat
 		JMP		_kbhitEnd
 
 _kbhitNo:
-		AND		#hFE,keyStat
+		AND		#hFE,keyStat ;;Altera apenas o bit 0 de keyStat
 _kbhitEnd:
 		mov		keyStat,R0
 		CLR		TECST
@@ -139,7 +157,7 @@ _kbhitEnd:
 ;	�     Outro valor: liga o estado SHIFT
 ;------------------------------------------------------------------------------
 shift:
-
+;; Verifica R0 e atualiza o bit1 de keyStat de acordo.
 		TST		R0
 		BEQ		_shiftOff
 		OR 		#h02, keyStat
@@ -163,7 +181,7 @@ _shiftend:
 ;	�     Outro valor: liga o estado CTRL
 ;------------------------------------------------------------------------------
 ctrl:
-
+;; Verifica R0 e atualiza o bit2 de keyStat de acordo.
 		TST		R0
 		BEQ		_ctrlOff
 		OR 		#h04, keyStat
@@ -193,62 +211,66 @@ _ctrlEnd:
 
 
 getchar:
+;;Inicia com o loop de bloqueio até que ocorra um hit no teclado
 		JSR		r7, kbhit
 		MOV		keyStat,r2
 		MOV		#h01,R1
-		AND		R0,R1
+		AND		R0,R1	;;Verifica se o bit0 de keystat está ativado, que indica se há tecla
 		BEQ		getchar
 		MOV		TECDT, R0
-
+		;;Verifica se a tecla pressionada foi um numero decimal
 		CMP		R0,#h2F
 		BLT		_getcharcontinue
 		CMP		R0,#h39
 		BLT		_getcharend
+
 _getcharcontinue:
+
+		;;Verifica se o CTRL esta ativado em keyStat, caso esteja, pula para a rotina de tratamento especifica
 		MOV		#h04,r1
 		AND		 R2,r1, ;Verificar se tem CTRL
 		BNE		_getcharCtrlMenor
-
+		;;Verifica se o Shift esta ativado em keyStat, caso esteja, pula para a rotina de tratamento especifica
 		MOV		#h02,r1
-		AND		 R2,r1, ;;Verificar se tem SHIFT
+		AND		 R2,r1,
 		BNE		_getcharshiftMenor
 		MOV		#02,R3
-		;; Se não pulou até aqui, tem tecla mas não tem CTL nem SHIFT
+		;; Caso não tenha pulado para nenhuma outra subrotina, significa que nem CTRL nem SHIFT estão pressionados, ou seja, uma letra minuscula deve ser entregue
 _getcharSemStatusMenor:
-		CMP		R0,#h61
+		CMP		R0,#h61 ;; Verifica o limite inferior das letras minusculas (a=61)
 		BGT		_getcharSemStatusMaior
-		ADD		#h20, R0
+		ADD		#h20, R0 ;;O deslocamento entre as faixas que cada condição (sem status,CTRL,SHIFT) atendem, estão distantes em h20 de seu caracter respectivo em outra faixa
 		JMP		_getcharSemStatusMenor
 _getcharSemStatusMaior:
 		CMP		R0,#H7A
 		BLT		_getcharEnd
-		SUB		#h20, R0
+		SUB		#h20, R0 ;;O deslocamento entre as faixas que cada condição (sem status,CTRL,SHIFT) atendem, estão distantes em h20 de seu caracter respectivo em outra faixa
 		JMP 		_getcharSemStatusMaior
 
 		;; Tratamento de CTRL
 _getcharCtrlMenor:
 		CMP		R0,#h00
 		BGT		_getcharCtrlMaior
-		ADD		#H20, R0
+		ADD		#H20, R0 ;;O deslocamento entre as faixas que cada condição (sem status,CTRL,SHIFT) atendem, estão distantes em h20 de seu caracter respectivo em outra faixa
 		JMP		_getcharCtrlMenor
 _getcharCtrlMaior:
 		CMP		R0,#H1A
 		BLT		_getcharEnd
-		SUB		#h20, R0
+		SUB		#h20, R0 ;;O deslocamento entre as faixas que cada condição (sem status,CTRL,SHIFT) atendem, estão distantes em h20 de seu caracter respectivo em outra faixa
 		JMP 		_getcharCtrlMaior
 		;; Tratamento de SHIFT
 _getcharshiftMenor:
 		CMP		R0,#H41
 		BGT		_getcharshiftMaior
-		ADD		#h20, R0
+		ADD		#h20, R0 ;;O deslocamento entre as faixas que cada condição (sem status,CTRL,SHIFT) atendem, estão distantes em h20 de seu caracter respectivo em outra faixa
 		JMP		_getcharshiftMenor
 _getcharshiftMaior:
 		CMP		R0,#H5A
 		BLT		_getcharEnd
-		SUB		#h20, R0
+		SUB		#h20, R0 ;;O deslocamento entre as faixas que cada condição (sem status,CTRL,SHIFT) atendem, estão distantes em h20 de seu caracter respectivo em outra faixa
 		JMP 		_getcharshiftMaior
 _getcharEnd:
-		AND		#hFE,keystat
+		AND		#hFE,keystat ;;Zera o bit 0 de keyStat para poder receber uma nova tecla no futuro
 		rts		r7
 
 
@@ -265,51 +287,52 @@ _getcharEnd:
 ;	Caso ocorra erro ou se os valores fornecidos na entrada sejam inv�lidos, a fun��o deve ser ignorada e retornado valor diferente de 0 (zero) em R0.
 ;------------------------------------------------------------------------------
 putchar:
+;; Verifica se o caractere de entrada está dentro da faixa de representação
 		CMP		R0,#h00
 		BLT		_putcharErrorChar
+
 		CMP		R0,#H7A
 		BGT		_putcharErrorChar
-
+;; Verifica se o visor escolhido está entre 0 e 1
 		CMP		R1,#01
 		BGT		_putcharErrorVisor
+		CMP		R1,#0
+		BLT		_putcharErrorVisor
 
-;;Validação de offset de visor
-
+;;Validação de offset de visor, caso o visor escolhido seja o 1, deve-se adicionar 18 para que os caracteres sejam impressos nos visores corretos
 		CMP			R1,#0
 		BNE			_putcharVisor1
 		MOV			#0,visorOffset
 		JMP			_putcharPrint
-
 _putcharVisor1:
 		MOV			#18,visorOffset
-
+;;Verificar se a posição escolhida para ser impresso esta entre 0 e 17 (range do visor)
 _putcharPrint:
 		CMP		R2,#h00
 		BLT		_putcharErrorForaVisor
 		CMP		R2,#17
 		BGT		_putcharErrorForaVisor
-
-		CMP		R1,#01
-		BGT		_putcharErrorVisor
-
+;; Atualiza o offset do visor de acordo com a posição e visor escolhidos
 		ADD		visorOffset,R2
 		MOV		R0,VISOR(R2)
+;; Verifica qual visor foi utilizado, caso tenha sido o 1, remove-se o offset de visor para que o controle de tamanho continue correto
 		CMP		R1,#0
 		BEQ		_putcharSemCorre
 		SUB		#18,r2
+;; Final do Programa
 _putcharSemCorre:
 		MOV		#0,R0
 		JMP		_putcharEnd
-
+;;Tratamentos de Erro
 _putcharErrorChar:
-		mov 		#h405,R0
+		mov 		#h405,R0 ;; Caractere Invalido
 		JMP 		_putcharEnd
 
 _putcharErrorVisor:
-		mov 		#h404,R0
+		mov 		#h404,R0  ;; Visor invalido
 		JMP 		_putcharEnd
 _putcharErrorForaVisor:
-		mov		 #h400,R0
+		mov		 #h400,R0 ;; Posição invalida
 		JMP		 _putcharEnd
 
 _putcharEnd:
@@ -329,20 +352,24 @@ _putcharEnd:
 ;	Caso o string seja maior do que o tamanho do visor (18 caracteres), o string deve ser truncado.
 ;------------------------------------------------------------------------------
 putmsg:
-		MOV		R0,R3
+		MOV		R0,R3 ;;Obtem posição da string
 		DEC		R3
 _putmsgLoop:
-		CMP		(R3), #hFF
+		CMP		(R3), #hFF ;; Verifica se é '\0'
 		BEQ		_putmsgStringFim
+		;; Transfere o proximo caractere da string para R0, limpa o bit mais significativo e chana putchar
 		MOV		(R3),R0
 		AND		#hff,R0
 		JSR		r7, putchar
 		CMP		R0,#0
+		;;Verifica se houve erro na impressão
 		BNE		_putmsgTratamento
+		;;Atualiza variavies de controle
 		INC		R3
 		INC		R2
 		JMP		_putmsgLoop
 _putmsgTratamento:
+		;;Caso o erro tenha ocorrido por causa de string muito grande, corrige pois é esperado o truncamento
 		CMP		#h400,R0
 		BNE		_putmsgFim
 _putmsgStringFim:
@@ -364,6 +391,7 @@ _putmsgFim:
 ;------------------------------------------------------------------------------
 start:
 
+		;; Inicializa o timer e habilita interrupções por timer
 		MOV		#1,TIMDT
 		OR		#h81,INTE
 		MOV		#0,contador
@@ -382,11 +410,11 @@ start:
 ;	R0<>0, se o tempo programado estogou-se
 ;------------------------------------------------------------------------------
 ready:
+		;;Verifica se o tempo programado se transcorreu
 		CMP		contador,contadorMeta
 		BLT		_notready
 		MOV		#1,R0
 		JMP		_readyend
-
 _notready:
 		MOV		#0,R0
 _readyend:
@@ -394,6 +422,7 @@ _readyend:
 
 
 _tratador:
+		;;Tratador de interrupção, verifica se foi o timer que a causou, caso tenha sido, incrementa em um o contador e finaliza
 		MOV		INTS,R4
 		AND		#h81,R4
 		BEQ		_tratadorFim
